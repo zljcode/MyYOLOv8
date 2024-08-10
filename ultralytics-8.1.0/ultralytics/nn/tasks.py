@@ -40,8 +40,29 @@ from ultralytics.nn.modules import (
     ResNetLayer,
     RTDETRDecoder,
     Segment,
+
+    BasicStage, PatchEmbed_FasterNet, PatchMerging_FasterNet,
+
+    SimAM, ECA, SpatialGroupEnhance, TripletAttention, CoordAtt, GAMAttention,
+    SE, ShuffleAttention, SKAttention, DoubleAttention, CoTAttention, EffectiveSEModule,
+    GlobalContext, GatherExcite, MHSA, S2Attention, NAMAttention, CrissCrossAttention,
+    SequentialPolarizedSelfAttention, ParallelPolarizedSelfAttention, ParNetAttention, CBAM,
+
+    C2f_CBAM, C2f_ECA, C2f_SE, C2f_CA, C2f_SimAM, C2f_CoT, C2f_Double, C2f_SK,
+    C2f_EffectiveSE, C2f_GlobalContext, C2f_GatherExcite, C2f_MHSA,
+    C2f_Triplet, C2f_SpatialGroupEnhance, C2f_S2, C2f_NAM,
+    C2f_ParNet, C2f_GAM, C2f_CrissCross, C2f_ParallelPolarized, C2f_SequentialPolarized,
+
+    space_to_depth, PSA, SCDown, C2fCIB, RepVGGDW,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, DEFAULT_CFG_KEYS, LOGGER, colorstr, emojis, yaml_load
+
+from ultralytics.nn.modules.layers.DySample import DySample
+
+from ultralytics.nn.modules.gsconv import GSConv, VoVGSCSPC
+
+from ultralytics.nn.modules.layers.ECA import ECA, C2f_ECA
+
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import v8ClassificationLoss, v8DetectionLoss, v8OBBLoss, v8PoseLoss, v8SegmentationLoss
 from ultralytics.utils.plotting import feature_visualization
@@ -182,6 +203,21 @@ class BaseModel(nn.Module):
                 if isinstance(m, RepConv):
                     m.fuse_convs()
                     m.forward = m.forward_fuse  # update forward
+
+                if isinstance(m, RepVGGDW):
+                    m.fuse()
+                    m.forward = m.forward_fuse
+
+                # FasterNet Begin----------------------------------------
+                if type(m) is PatchEmbed_FasterNet:
+                    m.proj = fuse_conv_and_bn(m.proj, m.norm)
+                    delattr(m, 'norm')  # remove BN
+                    m.forward = m.fuseforward
+                if type(m) is PatchMerging_FasterNet:
+                    m.reduction = fuse_conv_and_bn(m.reduction, m.norm)
+                    delattr(m, 'norm')  # remove BN
+                    m.forward = m.fuseforward
+                # FasterNet End----------------------------------------
             self.info(verbose=verbose)
 
         return self
@@ -325,9 +361,9 @@ class DetectionModel(BaseModel):
     def _clip_augmented(self, y):
         """Clip YOLO augmented inference tails."""
         nl = self.model[-1].nl  # number of detection layers (P3-P5)
-        g = sum(4**x for x in range(nl))  # grid points
+        g = sum(4 ** x for x in range(nl))  # grid points
         e = 1  # exclude layer count
-        i = (y[0].shape[-1] // g) * sum(4**x for x in range(e))  # indices
+        i = (y[0].shape[-1] // g) * sum(4 ** x for x in range(e))  # indices
         y[0] = y[0][..., :-i]  # large
         i = (y[-1].shape[-1] // g) * sum(4 ** (nl - 1 - x) for x in range(e))  # indices
         y[-1] = y[-1][..., i:]  # small
@@ -625,11 +661,11 @@ def torch_safe_load(weight):
     file = attempt_download_asset(weight)  # search online if missing locally
     try:
         with temporary_modules(
-            {
-                "ultralytics.yolo.utils": "ultralytics.utils",
-                "ultralytics.yolo.v8": "ultralytics.models.yolo",
-                "ultralytics.yolo.data": "ultralytics.data",
-            }
+                {
+                    "ultralytics.yolo.utils": "ultralytics.utils",
+                    "ultralytics.yolo.v8": "ultralytics.models.yolo",
+                    "ultralytics.yolo.data": "ultralytics.data",
+                }
         ):  # for legacy 8.0 Classify and Pose models
             return torch.load(file, map_location="cpu"), file  # load
 
@@ -755,36 +791,52 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
 
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in (
-            Classify,
-            Conv,
-            ConvTranspose,
-            GhostConv,
-            Bottleneck,
-            GhostBottleneck,
-            SPP,
-            SPPF,
-            DWConv,
-            Focus,
-            BottleneckCSP,
-            C1,
-            C2,
-            C2f,
-            C3,
-            C3TR,
-            C3Ghost,
-            nn.ConvTranspose2d,
-            DWConvTranspose2d,
-            C3x,
-            RepC3,
+                Classify,
+                Conv,
+                ConvTranspose,
+                GhostConv,
+                Bottleneck,
+                GhostBottleneck,
+                SPP,
+                SPPF,
+                DWConv,
+                Focus,
+                BottleneckCSP,
+                C1,
+                C2,
+                C2f,
+                C3,
+                C3TR,
+                C3Ghost,
+                nn.ConvTranspose2d,
+                DWConvTranspose2d,
+                C3x,
+                RepC3,
+                BasicStage, PatchEmbed_FasterNet, PatchMerging_FasterNet,
+
+                C2f_CA, C2f_SE, C2f_ECA, C2f_CBAM, C2f_SimAM, C2f_CoT, C2f_Double, C2f_SK,
+                C2f_EffectiveSE, C2f_GlobalContext, C2f_GatherExcite, C2f_MHSA,
+                C2f_Triplet, C2f_SpatialGroupEnhance, C2f_S2, C2f_NAM,
+                C2f_ParNet, C2f_GAM, C2f_CrissCross, C2f_ParallelPolarized, C2f_SequentialPolarized,
+
+                PSA, SCDown, C2fCIB,
+
+                GSConv, VoVGSCSPC
         ):
             c1, c2 = ch[f], args[0]
             if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
 
             args = [c1, c2, *args[1:]]
-            if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x, RepC3):
+            if m in (BottleneckCSP, C1, C2, C2f, C3, C3TR, C3Ghost, C3x, RepC3, C2f_CA, C2f_SE, C2f_ECA, C2f_CBAM,
+                     C2f_SimAM, C2f_CoT, C2f_Double, C2f_SK, C2f_EffectiveSE, C2f_GlobalContext, C2f_GatherExcite,
+                     C2f_MHSA, C2f_Triplet, C2f_SpatialGroupEnhance, C2f_S2, C2f_NAM,
+                     C2f_ParNet, C2f_GAM, C2f_CrissCross, C2f_ParallelPolarized, C2f_SequentialPolarized,
+                     C2fCIB, VoVGSCSPC):
                 args.insert(2, n)  # number of repeats
                 n = 1
+            elif m in [BasicStage]:
+                args.pop(1)
         elif m is AIFI:
             args = [ch[f], *args]
         elif m in (HGStem, HGBlock):
@@ -797,6 +849,35 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c2 = args[1] if args[3] else args[1] * 4
         elif m is nn.BatchNorm2d:
             args = [ch[f]]
+
+
+
+        elif m in [DySample]:
+            c1 = ch[f]
+            args = [c1, *args[0:]]
+
+
+        elif m is space_to_depth:
+            c2 = 4 * ch[f]
+
+        # ------------Attention ↆ------------
+        elif m in [SimAM, ECA, SpatialGroupEnhance, TripletAttention]:
+            args = [*args[:]]
+        elif m in [CoordAtt, GAMAttention]:
+            c1, c2 = ch[f], args[0]
+            if c2 != nc:  # if c2 not equal to number of classes (i.e. for Classify() output)
+                c2 = make_divisible(min(c2, max_channels) * width, 8)
+            args = [c1, c2, *args[1:]]
+        elif m in [SE, ShuffleAttention, SKAttention, DoubleAttention, CoTAttention, EffectiveSEModule,
+                   GlobalContext, GatherExcite, MHSA, CBAM]:
+            c1 = ch[f]
+            args = [c1, *args[0:]]
+        elif m in [S2Attention, NAMAttention, CrissCrossAttention, SequentialPolarizedSelfAttention,
+                   ParallelPolarizedSelfAttention, ParNetAttention]:
+            c1 = ch[f]
+            args = [c1]
+        # ------------Attention ↑--------------
+
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
         elif m in (Detect, Segment, Pose, OBB):
