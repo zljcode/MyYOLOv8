@@ -1,7 +1,7 @@
-path: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/HRSID_JPG  # dataset root dir
-train: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/HRSID_JPG/images/train  # train images (relative to 'path')3922 images
-val: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/HRSID_JPG/images/val # val images (relative to 'path') 1121 images
-test: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/HRSID_JPG/images/test # val images (relative to 'path') 561 images
+path: ../ultralytics-8.1.0/ultralytics/datasets/HRSID_JPG  # dataset root dir
+train: ../ultralytics-8.1.0/ultralytics/datasets/HRSID_JPG/images/train  # train images (relative to 'path')3922 images
+val: ../ultralytics-8.1.0/ultralytics/datasets/HRSID_JPG/images/val # val images (relative to 'path') 1121 images
+test: ../ultralytics-8.1.0/ultralytics/datasets/HRSID_JPG/images/test # val images (relative to 'path') 561 images
 
 # number of classes
 nc: 1
