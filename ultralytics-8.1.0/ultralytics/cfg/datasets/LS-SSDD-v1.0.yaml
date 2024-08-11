@@ -1,0 +1,11 @@
+path: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/LS-SSDD  # dataset root dir
+train: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/LS-SSDD/images/train  # train images (relative to 'path') 6300 images
+val: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/LS-SSDD/images/val # val images (relative to 'path') 1800 images
+test: /mnt/d/CV_Code/YOLOv8/ultralytics/ultralytics/datasets/LS-SSDD/images/test # test images (relative to 'path') 900 images
+
+# number of classes
+nc: 1
+
+# class names
+names:
+  0: ship
